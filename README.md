@@ -1,3 +1,5 @@
+![Bekant PCB](/bekant_pcb.jpg)
+![Schematic](/schematic.png)
 # Instructions
 - set up Rasperry Pi Pico environment as described [here](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf)
 - prepare Bekant PCB as described [here](https://github.com/robin7331/IKEA-Hackant)
