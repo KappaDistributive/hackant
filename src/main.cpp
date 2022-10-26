@@ -16,9 +16,10 @@
 #define POSITION_MAX 6400
 #define POSITION_SIT 1800
 #define POSITION_STAND 5700
-#define POSITION_MARGIN 170
+#define POSITION_MARGIN 120
 
-#define SHORT_PRESS_DURATION 150
+#define SHORT_PRESS_DURATION 250
+#define DEBOUNCE_DURATION 50
 #define TICK_DURATION 200
 #define TX_UP 6
 #define BUTTON_UP 7
@@ -33,15 +34,32 @@ class Table {
   uint32_t m_button_duration[2];
   bool m_target[2];
 
-
-  void set_button(size_t index, bool value) {
-    if (index > 1) return;
+  void set_button(size_t index, uint32_t events) {
+    if (index > 1)
+      return;
     auto ts = to_ms_since_boot(get_absolute_time());
+    auto duration = ts - this->m_button_ts[index];
+    if (duration < DEBOUNCE_DURATION) {
+      printf("Debouncing button press after %dms\n", duration);
+      return;
+    }
+    bool value{false};
+    switch (events) {
+    case 4:
+      value = true;
+      break;
+    case 12:
+      value = !this->m_button[index];
+      break;
+    default:
+      break;
+    }
     this->m_button[index] = value;
     this->m_button_duration[index] = ts - this->m_button_ts[index];
     this->m_button_ts[index] = ts;
 
-    if (!this->m_button[index] && this->m_button_duration[index] < SHORT_PRESS_DURATION) {
+    if (!this->m_button[index] &&
+        this->m_button_duration[index] < SHORT_PRESS_DURATION) {
       if ((index == 0 && this->m_position < POSITION_STAND) ||
           (index == 1 && this->m_position > POSITION_SIT)) {
         this->m_target[index] = true;
@@ -63,15 +81,20 @@ class Table {
   }
 
  public:
-  Table() : m_position(0), m_button{false, false}, m_button_ts{0, 0}, m_button_duration{0, 0}, m_target{false, false} {}
+  Table()
+      : m_position(0), m_button{false, false}, m_button_ts{0, 0},
+        m_button_duration{0, 0}, m_target{false, false} {}
 
-  void set_button_up(bool value) { this->set_button(0, value); }
+  void set_button_up(uint32_t events) { this->set_button(0, events); }
 
-  void set_button_down(bool value) { this->set_button(1, value); }
+  void set_button_down(uint32_t events) { this->set_button(1, events); }
 
   void set_position(uint16_t position) {
     if (this->position_is_valid(position)) {
       this->m_position = position;
+    } else {
+      printf("Attempted to set table position to an invalid value: %d\n",
+             position);
     }
   }
 
@@ -80,40 +103,48 @@ class Table {
   uint16_t position() const { return this->m_position; }
 
   bool move_down() {
+    bool move{false};
     if (this->m_button[1]) {
       this->m_target[0] = false;
       this->m_target[1] = false;
-      return true;
+      move = true;
     } else if (this->m_target[1]) {
-      if (this->m_position > POSITION_SIT + POSITION_MARGIN) {
-        return true;
+      if (static_cast<int>(this->position()) > POSITION_SIT + POSITION_MARGIN) {
+        move = true;
+      } else {
+        printf("Reached POSITION_SIT: %d\t%.0f\n", this->position(),
+               this->height());
+        this->m_target[0] = false;
+        this->m_target[1] = false;
+        move = false;
       }
-      this->m_target[0] = false;
-      this->m_target[1] = false;
     }
-    return false;
+    return move;
   }
 
   bool move_up() {
+    bool move{false};
     if (this->m_button[0]) {
       this->m_target[0] = false;
       this->m_target[1] = false;
-      return true;
+      move = true;
     } else if (this->m_target[0]) {
-      if (this->m_position + POSITION_MARGIN < POSITION_STAND) {
-        return true;
+      if (static_cast<int>(this->position()) + POSITION_MARGIN < POSITION_STAND) {
+        move = true;
+      } else {
+        printf("Reached POSITION_STAND: %d\t%.0f\n", this->position(),
+               this->height());
+        this->m_target[0] = false;
+        this->m_target[1] = false;
+        move = false;
       }
-      this->m_target[0] = false;
-      this->m_target[1] = false;
     }
-
-    return false;
+    return move;
   }
 };
 
 static Table table;
 static uint32_t tick_ts{0};
-
 
 void on_uart_rx() {
   uint8_t buffer[16];
@@ -130,10 +161,11 @@ void on_uart_rx() {
 }
 
 void button_callback(unsigned int gpio, uint32_t events) {
+  printf("Button %d fired events %d\n", gpio, events);
   if (gpio == static_cast<unsigned int>(BUTTON_UP)) {
-    table.set_button_up(events == 4);
+    table.set_button_up(events);
   } else if (gpio == static_cast<unsigned int>(BUTTON_DOWN)) {
-    table.set_button_down(events == 4);
+    table.set_button_down(events);
   }
 }
 
@@ -172,8 +204,8 @@ int main() {
   while (1) {
     auto ts = to_ms_since_boot(get_absolute_time());
     if (ts > tick_ts + TICK_DURATION) {
-      printf("Position: %d\t%.0fmm\n", table.position(), table.height());
       tick_ts = ts;
+      printf("Position: %d\t%.0fmm\n", table.position(), table.height());
     }
     if (table.move_down()) {
       gpio_put(TX_DOWN, 1);
