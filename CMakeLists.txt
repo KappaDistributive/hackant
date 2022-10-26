@@ -4,7 +4,7 @@ include($ENV{PICO_SDK_PATH}/pico_sdk_init.cmake)
 set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 
-project(pico-test)
+project(hackant)
 
 add_executable(main src/main.cpp)
 target_link_libraries(main pico_stdlib)
