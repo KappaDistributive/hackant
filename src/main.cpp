@@ -1,3 +1,4 @@
+// Copyright 2022 Stefan Mesken
 #include <stdio.h>
 #include <string>
 
@@ -9,6 +10,8 @@
 #define BAUD_RATE 19230 // ~ bit timing of 52us
 #define DATA_BITS 8
 #define STOP_BITS 1
+#define LIN_SYNC_MASK 0x55
+#define LIN_POSITION_PID 0x92
 #define PARITY UART_PARITY_NONE
 #define UART_RX_PIN 5
 
@@ -17,6 +20,8 @@
 #define POSITION_SIT 1800
 #define POSITION_STAND 5700
 #define POSITION_MARGIN 120
+#define POSITION_TO_HEIGHT_SLOPE 0.0973
+#define POSITION_TO_HEIGHT_BIAS 628.73
 
 #define SHORT_PRESS_DURATION 250
 #define DEBOUNCE_DURATION 50
@@ -75,7 +80,7 @@ class Table {
     // Converts table position as reported on the LIN bus to height in
     // millimeters.
     if (position_is_valid(position)) {
-      return 0.0973 * static_cast<float>(position) + 628.73;
+      return POSITION_TO_HEIGHT_SLOPE * static_cast<float>(position) + POSITION_TO_HEIGHT_BIAS;
     }
     return -1.0;
   }
@@ -150,7 +155,7 @@ void on_uart_rx() {
   uint8_t buffer[16];
   uart_read_blocking(UART_ID, buffer, 16);
   for (size_t index = 0; index < 11; index++) {
-    if (buffer[index] == 0x55 && buffer[index + 1] == 0x92) {
+    if (buffer[index] == LIN_SYNC_MASK && buffer[index + 1] == LIN_POSITION_PID) {
       // The table position is a two byte value. LSB is sent first.
       uint16_t position{buffer[index + 3]};
       position <<= 8;
