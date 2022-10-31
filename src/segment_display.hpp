@@ -31,7 +31,6 @@ private:
   };
 
   void set_shift_register(uint8_t value) const {
-    printf("Value: %d\n", value);
     gpio_put(this->m_rclk_pin, 0);
     for (size_t index{0}; index < 8; ++index) {
       gpio_put(this->m_srclk_pin, 0);
@@ -93,7 +92,6 @@ public:
 
   void render() const {
     if (this->m_enabled) {
-      printf("Rendering:\n");
       char character{' '};
       for (size_t index{0}; index < this->m_enable_pins.size(); ++index) {
         if (index < this->m_text.size()) {
@@ -101,14 +99,11 @@ public:
         } else {
           character = ' ';
         }
-        printf("%c\t%x\n", character, this->m_display_lookup.at(character));
         if (index == 0) {
           gpio_put(this->m_enable_pins[this->m_enable_pins.size() - 1], 0);
         } else {
           gpio_put(this->m_enable_pins[index - 1], 0);
         }
-        printf("Setting %c %x\n", character,
-               this->m_display_lookup.at(character));
         set_shift_register(this->m_display_lookup.at(character));
         gpio_put(this->m_enable_pins[index], 1);
         sleep_ms(1);
